@@ -4,6 +4,7 @@ import csv
 import os
 import time
 import json
+import random
 
 # Class gsmarena scrap the website phones models and its devices and save to csv file individually.
 class Gsmarena():
@@ -16,17 +17,19 @@ class Gsmarena():
         self.phones_brands = []
         self.url = 'https://www.gsmarena.com/' # GSMArena website url
         self.new_folder_name = 'GSMArenaDataset' # Folder name on which files going to save.
-        self.absolute_path = os.popen('pwd').read().strip() + '/' + self.new_folder_name  # It create the absolute path of the GSMArenaDataset folder.
+        self.base_path = '/Users/zhaoyi/Library/CloudStorage/Dropbox/5G trade/Zhaoyi'  # Base directory where the dataset folder will be created.
+        self.absolute_path = os.path.join(self.base_path, self.new_folder_name)  # It create the absolute path of the GSMArenaDataset folder.
 
     # This function crawl the html code of the requested URL.
     def crawl_html_page(self, sub_url):
 
         url = self.url + sub_url  # Url for html content parsing.
-        header={"User-Agent":"#user agent of your system  "}
-        time.sleep(30)  #SO that your IP does not gets blocked by the website
+        header={"User-Agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+        # time.sleep(30)  #SO that your IP does not gets blocked by the website
+        time.sleep(random.uniform(5, 13))  # Randomized delay so the request pattern looks less botlike.
         # Handing the connection error of the url.
         try:
-            page = requests.get(url,timeout= 5, headers=header)
+            page = requests.get(url,timeout= 30, headers=header)
             soup = BeautifulSoup(page.text, 'html.parser')  # It parses the html data from requested url.
             return soup
 
@@ -62,9 +65,15 @@ class Gsmarena():
             nav_link = [link['href'] for link in nav_link]
             nav_link.append(phone_brand_link)
             nav_link.insert(0, nav_link.pop())
+            # Deduplicate while preserving order — the pager's "Next →" arrow
+            # repeats a numbered page's href, which would otherwise be scraped twice.
+            nav_link = list(dict.fromkeys(nav_link))
         for link in nav_link:
             soup = self.crawl_html_page(link)
             data = soup.find(class_='section-body')
+            if data is None:
+                print("No 'section-body' found on", link, "- skipping.")
+                continue
             for line1 in data.findAll('a'):
                 links.append(line1['href'])
 
@@ -104,13 +113,13 @@ class Gsmarena():
 
     # This function create the folder 'GSMArenaDataset'.
     def create_folder(self):
-        if not os.path.exists(self.new_folder_name):
-            os.system('mkdir ' + self.new_folder_name)
-            print("Creating ", self.new_folder_name, " Folder....")
+        if not os.path.exists(self.absolute_path):
+            os.makedirs(self.absolute_path)
+            print("Creating ", self.absolute_path, " Folder....")
             time.sleep(6)
             print("Folder Created.")
         else:
-            print(self.new_folder_name , "directory already exists")
+            print(self.absolute_path , "directory already exists")
 
     # This function check the csv file exists in the 'GSMArenaDataset' directory or not.
     def check_file_exists(self):
@@ -147,11 +156,9 @@ class Gsmarena():
 
 
 # This is the main function which create the object of Gsmarena class and call the save_specificiton_to_file function.
-i = 1
-while i == 1:
-    if __name__ == "__main__":
-        obj = Gsmarena()
-        try:
-            obj.save_specification_to_file()
-        except KeyboardInterrupt:
-            print("File has been stopped due to KeyBoard Interruption.")
+if __name__ == "__main__":
+    obj = Gsmarena()
+    try:
+        obj.save_specification_to_file()
+    except KeyboardInterrupt:
+        print("File has been stopped due to KeyBoard Interruption.")
