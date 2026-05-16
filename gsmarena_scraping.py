@@ -26,7 +26,7 @@ class Gsmarena():
         url = self.url + sub_url  # Url for html content parsing.
         header={"User-Agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
         # time.sleep(30)  #SO that your IP does not gets blocked by the website
-        time.sleep(random.uniform(5, 13))  # Randomized delay so the request pattern looks less botlike.
+        time.sleep(random.uniform(20, 30))  # Randomized delay so the request pattern looks less botlike.
         # Handing the connection error of the url.
         try:
             page = requests.get(url,timeout= 30, headers=header)
@@ -83,8 +83,12 @@ class Gsmarena():
     def crawl_phones_models_specification(self, link, phone_brand):
         phone_data = {}
         soup = self.crawl_html_page(link)
-        model_name = soup.find(class_='specs-phone-name-title').text
+        title_el = soup.find(class_='specs-phone-name-title')
         model_img_html = soup.find(class_='specs-photo-main')
+        if title_el is None or model_img_html is None:
+            print("Skipping non-spec page:", link)
+            return None
+        model_name = title_el.text
         model_img = model_img_html.find('img')['src']
         phone_data.update({"Brand": phone_brand})
         phone_data.update({"Model Name": model_name})
@@ -95,10 +99,11 @@ class Gsmarena():
             for line in table.findAll('tr'):
                 temp = []
                 for l in line.findAll('td'):
-                    text = l.getText()
-                    text = text.strip()
-                    text = text.lstrip()
-                    text = text.rstrip()
+                    # text = l.getText()
+                    # text = text.strip()
+                    # text = text.lstrip()
+                    # text = text.rstrip()
+                    text = l.getText(separator=' | ', strip=True)
                     text = text.replace("\n", "")
                     temp.append(text)
                     if temp[0] in phone_data.keys():
@@ -138,6 +143,9 @@ class Gsmarena():
                 print("Working on", brand[0].title(), "brand.")
                 for value in link:
                     datum = self.crawl_phones_models_specification(value, brand[0])
+                    if datum is None:
+                        model_value += 1
+                        continue
                     datum = { k:v.replace('\n', ' ').replace('\r', ' ') for k,v in datum.items() }
                     phones_data.append(datum)
                     print("Completed ", model_value, "/", len(link))
