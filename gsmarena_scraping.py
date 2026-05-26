@@ -2,6 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 import csv
 import os
+import re
 import time
 import json
 import random
@@ -26,7 +27,7 @@ class Gsmarena():
         url = self.url + sub_url  # Url for html content parsing.
         header={"User-Agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
         # time.sleep(30)  #SO that your IP does not gets blocked by the website
-        time.sleep(random.uniform(20, 30))  # Randomized delay so the request pattern looks less botlike.
+        time.sleep(random.uniform(25, 30))  # Randomized delay so the request pattern looks less botlike.
         # Handing the connection error of the url.
         try:
             page = requests.get(url,timeout= 30, headers=header)
@@ -58,16 +59,40 @@ class Gsmarena():
         nav_link = []
         soup = self.crawl_html_page(phone_brand_link)
         nav_data = soup.find(class_='nav-pages')
-        if not nav_data:
-            nav_link.append(phone_brand_link)
-        else:
-            nav_link = nav_data.findAll('a')
-            nav_link = [link['href'] for link in nav_link]
-            nav_link.append(phone_brand_link)
-            nav_link.insert(0, nav_link.pop())
-            # Deduplicate while preserving order — the pager's "Next →" arrow
-            # repeats a numbered page's href, which would otherwise be scraped twice.
-            nav_link = list(dict.fromkeys(nav_link))
+        # --- Original pagination logic (kept for reference) ---
+        # GSMArena's pager renders as "◄ 1 2 … N ►", so .nav-pages only exposes
+        # <a> tags for page 2 and the last page; pages 3..N-1 are hidden behind
+        # the ellipsis. Trusting those <a> tags caused us to scrape only ~3
+        # pages per brand (e.g. ~100/1160 Samsung models).
+        #
+        # if not nav_data:
+        #     nav_link.append(phone_brand_link)
+        # else:
+        #     nav_link = nav_data.findAll('a')
+        #     nav_link = [link['href'] for link in nav_link]
+        #     nav_link.append(phone_brand_link)
+        #     nav_link.insert(0, nav_link.pop())
+        #     # Deduplicate while preserving order — the pager's "Next →" arrow
+        #     # repeats a numbered page's href, which would otherwise be scraped twice.
+        #     nav_link = list(dict.fromkeys(nav_link))
+        # --- End original ---
+
+        nav_link.append(phone_brand_link)  # Page 1 (seed URL).
+        if nav_data:
+            # Find the highest page number from the pager's numeric link texts,
+            # then synthesize every intermediate page URL from one of the
+            # existing -pN.php hrefs.
+            max_page = 1
+            template_href = None
+            for a in nav_data.findAll('a'):
+                text = a.get_text(strip=True)
+                if text.isdigit():
+                    max_page = max(max_page, int(text))
+                    if template_href is None and re.search(r'-p\d+\.php$', a.get('href', '')):
+                        template_href = a['href']
+            if template_href:
+                for n in range(2, max_page + 1):
+                    nav_link.append(re.sub(r'-p\d+\.php$', f'-p{n}.php', template_href))
         for link in nav_link:
             soup = self.crawl_html_page(link)
             data = soup.find(class_='section-body')
